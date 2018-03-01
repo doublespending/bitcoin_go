@@ -31,6 +31,10 @@ func NewGenesisBlock(coinbase *Transaction) *Block {
 	return NewBlock([]*Transaction{coinbase}, []byte{}, 0)
 }
 
+func BlockEqual(b1 *Block, b2 *Block) bool {
+	return bytes.Compare(b1.Serialize(), b2.Serialize()) == 0
+}
+
 func isGenesisBlock(b *Block) bool {
 	if b.Height == 0 && len(b.Transactions) == 1 && b.Transactions[0].IsCoinbase() && len(b.PrevBlockHash) == 0 {
 		pow := NewProofOfWork(b)

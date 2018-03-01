@@ -18,7 +18,8 @@ func NewMerkleTree(data [][]byte) *MerkleTree {
 	var nodes []MerkleNode
 
 	if len(data)%2 != 0 {
-		data = append(data, data[len(data)-1])
+		copydata := data[len(data)-1]
+		data = append(data, copydata)
 	}
 
 	for _, datum := range data {

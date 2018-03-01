@@ -1,0 +1,11 @@
+The goal of this article is to implement the following scenario:
+
+The central node creates a blockchain.
+Other (wallet) node connects to it and downloads the blockchain.
+One more (miner) node connects to the central node and downloads the blockchain.
+The wallet node creates a transaction.
+The miner nodes receives the transaction and keeps it in its memory pool.
+When there are enough transactions in the memory pool, the miner starts mining a new block.
+When a new block is mined, it’s send to the central node.
+The wallet node synchronizes with the central node.
+User of the wallet node checks that their payment was successful.

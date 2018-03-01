@@ -125,6 +125,10 @@ func sendAddr(address string) {
 
 func sendBlock(address string, b *Block) {
 	data := block{nodeAddress, b.Serialize()}
+	fmt.Println("Sending Block: ")
+
+	fmt.Printf("Merkle Root: %x\n", DeserializeBlock(b.Serialize()).HashTransactions())
+
 	payload := gobEncode(data)
 	request := append(commandToBytes("block"), payload...)
 
@@ -213,9 +217,26 @@ func handleBlock(request []byte, bc *Blockchain) {
 		log.Panic(err)
 	}
 
-	nodeID := nodeAddress[len(nodeAddress)-4 : len(nodeAddress)]
 	blockData := payload.Block
+	/*
+		Serialize()和DeserializeBlock()这对有点问题
+	*/
 	block := DeserializeBlock(blockData)
+
+	fmt.Printf("=============Receive Block %x ============\n", block.Hash)
+	fmt.Printf("Height: %d\n", block.Height)
+	fmt.Printf("Prev. block: %x\n", block.PrevBlockHash)
+	fmt.Printf("Merkle Root: %x\n", block.HashTransactions())
+	fmt.Printf("Timestamp: %x\n", IntToHex(block.Timestamp))
+	fmt.Printf("Nonce: %x\n", IntToHex(int64(block.Nonce)))
+
+	for _, tx := range block.Transactions {
+		fmt.Println(tx)
+	}
+	fmt.Println("===============================================================")
+
+	nodeID := nodeAddress[len(nodeAddress)-4 : len(nodeAddress)]
+
 	if block != nil {
 		if isGenesisBlock(block) {
 			fmt.Println("Receive a genesis block.")
@@ -241,7 +262,8 @@ func handleBlock(request []byte, bc *Blockchain) {
 
 		for blockHash, _ = range blocksInTransit {
 			// get just one block
-			sendGetData(payload.AddrFrom, "block", []byte(blockHash))
+			target, _ := hex.DecodeString(blockHash)
+			sendGetData(payload.AddrFrom, "block", target)
 			break
 		}
 
@@ -261,7 +283,7 @@ func handleInv(request []byte, bc *Blockchain) {
 		log.Panic(err)
 	}
 
-	fmt.Printf("Received inventory with %d %s\n", len(payload.Items), payload.Type)
+	fmt.Printf("%s received inventory from %s with %d %s\n", nodeAddress, payload.AddrFrom, len(payload.Items), payload.Type)
 
 	// payload contains AddrFrom, Type and slice of id
 	if payload.Type == "block" {
@@ -271,7 +293,9 @@ func handleInv(request []byte, bc *Blockchain) {
 		// Ask for one id in the payload
 		var blockHash string
 		for blockHash, _ = range blocksInTransit {
-			sendGetData(payload.AddrFrom, "block", []byte(blockHash))
+			target, _ := hex.DecodeString(blockHash)
+			sendGetData(payload.AddrFrom, "block", target)
+			fmt.Printf("Then I ask %s for block: %s\n", payload.AddrFrom, blockHash)
 			break
 		}
 
@@ -301,7 +325,11 @@ func handleGetBlocks(request []byte, bc *Blockchain) {
 	if err != nil {
 		log.Panic(err)
 	}
-
+	if bc != nil {
+		fmt.Println("Handle GetBlocks")
+		block, _ := bc.GetBlock(bc.tip)
+		fmt.Printf("Merkle Root: %x\n", block.HashTransactions())
+	}
 	blocks := bc.GetBlockHashes()
 	sendInv(payload.AddrFrom, "block", blocks)
 }
@@ -319,11 +347,25 @@ func handleGetData(request []byte, bc *Blockchain) {
 	}
 
 	if payload.Type == "block" {
-		block, err := bc.GetBlock([]byte(payload.ID))
+		if bc != nil {
+			fmt.Println("Handle GetData")
+			block, _ := bc.GetBlock(bc.tip)
+			fmt.Printf("Merkle Root: %x\n", block.HashTransactions())
+		}
+
+		fmt.Printf("I receive a request for block: %s\n", hex.EncodeToString(payload.ID))
+		block, err := bc.GetBlock(payload.ID)
+		fmt.Printf("Prev. block: %x\n", block.PrevBlockHash)
+		fmt.Printf("Merkle Root: %x\n", block.HashTransactions())
+		fmt.Printf("Timestamp: %x\n", IntToHex(block.Timestamp))
+		fmt.Printf("Nonce: %x\n", IntToHex(int64(block.Nonce)))
+
 		if err != nil {
+			fmt.Printf("I don't have block: %s\n", hex.EncodeToString(payload.ID))
 			return
 		}
 
+		fmt.Printf("I have block: %s and send it to %s\n", hex.EncodeToString(payload.ID), payload.AddrFrom)
 		sendBlock(payload.AddrFrom, &block)
 	}
 
@@ -445,12 +487,20 @@ func handleVersion(request []byte, bc *Blockchain) {
 		log.Panic(err)
 	}
 
+	if bc != nil {
+		fmt.Println("Handle Version")
+		block, _ := bc.GetBlock(bc.tip)
+		fmt.Printf("Merkle Root: %x\n", block.HashTransactions())
+	}
+
 	myBestHeight, _ := bc.GetBestHeight()
 	foreignerBestHeight := payload.BestHeight
-
+	fmt.Printf("%s receives version from %s\n", nodeAddress, payload.AddrFrom)
 	if myBestHeight < foreignerBestHeight {
+		fmt.Printf("%s has older version of blockchain. So ask %s for newer version.\n", nodeAddress, payload.AddrFrom)
 		sendGetBlocks(payload.AddrFrom)
 	} else if myBestHeight > foreignerBestHeight {
+		fmt.Printf("%s has newer version of blockchain. So inform %s with newer version.\n", nodeAddress, payload.AddrFrom)
 		sendVersion(payload.AddrFrom, bc)
 	}
 
@@ -507,14 +557,23 @@ func StartServer(nodeID, minerAddress string) {
 
 	defer ln.Close()
 
+	InitNewWork()
+
 	dbFile := fmt.Sprintf(dbFile, nodeID)
 	var bc *Blockchain
 	if dbExists(dbFile) == false {
 		bc = nil
+		sendVersion(fullNodes[0], bc)
+		fmt.Println("I don't have a blockchain.")
+		fmt.Printf("%s sends version to %s\n", nodeAddress, fullNodes[0])
 	} else {
-		bc := NewBlockchain(nodeID)
+		bc = NewBlockchain(nodeID)
+		height, _ := bc.GetBestHeight()
+		defer bc.db.Close()
+		fmt.Printf("I already have a blockchain with height %d.\n", height)
 		if ElementInStrSlice(fullNodes, nodeAddress) == false {
 			sendVersion(fullNodes[0], bc)
+			fmt.Printf("%s sends version to %s\n", nodeAddress, fullNodes[0])
 		}
 	}
 
@@ -523,6 +582,15 @@ func StartServer(nodeID, minerAddress string) {
 		if err != nil {
 			log.Panic(err)
 		}
+		// print the state of that node
+
+		fmt.Printf("========My Address: %s=========Miner: %s=============\n", nodeAddress, miningAddress)
+		fmt.Printf("Neighbor: %s\n", knownNodes)
+		fmt.Printf("Full Node: %s\n", fullNodes)
+		height, _ := bc.GetBestHeight()
+		fmt.Printf("Blockchain Height: %d\n", height)
+		fmt.Println("=========================================================================")
+
 		go handleConnection(conn, bc)
 	}
 

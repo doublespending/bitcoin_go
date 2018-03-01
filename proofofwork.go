@@ -12,7 +12,7 @@ var (
 	maxNonce = math.MaxInt64
 )
 
-const targetBits = 1
+const targetBits = 4
 
 type ProofOfWork struct {
 	block  *Block
@@ -72,8 +72,19 @@ func (pow *ProofOfWork) Validate() bool {
 	var hashInt big.Int
 
 	data := pow.prepareData(pow.block.Nonce)
+
 	hash := sha256.Sum256(data)
 	hashInt.SetBytes(hash[:])
 
-	return hashInt.Cmp(pow.target) == -1 && bytes.Compare(hash[:], pow.block.Hash) == 0
+	if hashInt.Cmp(pow.target) == -1 {
+		if bytes.Compare(hash[:], pow.block.Hash) == 0 {
+			return true
+		} else {
+			fmt.Println("Unmatched blockHash/blockID")
+		}
+	} else {
+		fmt.Println("Invalid PoW")
+	}
+
+	return false
 }

@@ -5,5 +5,6 @@ func InitNewWork() {
 	for _, addr := range fullNodes {
 		knownNodes[addr]++
 	}
+
 	delete(knownNodes, nodeAddress)
 }

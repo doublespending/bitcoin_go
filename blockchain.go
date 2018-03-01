@@ -22,6 +22,30 @@ type Blockchain struct {
 	db  *bolt.DB
 }
 
+func (bc *Blockchain) GetBlock(blockHash []byte) (Block, error) {
+	var block Block
+
+	err := bc.db.View(func(tx *bolt.Tx) error {
+		b := tx.Bucket([]byte(blocksBucket))
+
+		blockData := b.Get(blockHash)
+
+		if blockData == nil {
+			return errors.New("Block is not found.")
+		}
+
+		block = *DeserializeBlock(blockData)
+
+		return nil
+	})
+
+	if err != nil {
+		return block, err
+	}
+
+	return block, nil
+}
+
 func CopyGenesisBlock(nodeID string, block *Block) *Blockchain {
 	dbFile := fmt.Sprintf(dbFile, nodeID)
 	if dbExists(dbFile) {
@@ -218,6 +242,11 @@ func (bc *Blockchain) FindUTXO() map[string]TXOutputs {
 				}
 
 				outs := UTXO[txID]
+				// map must be made before insertion
+				if outs.Outputs == nil {
+					outs.Outputs = make(map[int]TXOutput)
+				}
+
 				outs.Outputs[outIdx] = out
 				UTXO[txID] = outs
 
@@ -240,6 +269,10 @@ func (bc *Blockchain) FindUTXO() map[string]TXOutputs {
 }
 
 func (bc *Blockchain) GetBestHeight() (int, []byte) {
+	if bc == nil {
+		return -1, []byte{}
+	}
+
 	var lastBlock Block
 
 	err := bc.db.View(func(tx *bolt.Tx) error {
@@ -255,30 +288,6 @@ func (bc *Blockchain) GetBestHeight() (int, []byte) {
 	}
 
 	return lastBlock.Height, lastBlock.Hash
-}
-
-func (bc *Blockchain) GetBlock(blockHash []byte) (Block, error) {
-	var block Block
-
-	err := bc.db.View(func(tx *bolt.Tx) error {
-		b := tx.Bucket([]byte(blocksBucket))
-
-		blockData := b.Get(blockHash)
-
-		if blockData == nil {
-			return errors.New("Block is not found.")
-		}
-
-		block = *DeserializeBlock(blockData)
-
-		return nil
-	})
-
-	if err != nil {
-		return block, err
-	}
-
-	return block, nil
 }
 
 func (bc *Blockchain) GetBlockHashes() [][]byte {

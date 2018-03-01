@@ -149,7 +149,7 @@ func (cli *CLI) Run() {
 
 	if startNodeCmd.Parsed() {
 		nodeID := os.Getenv("NODE_ID")
-
+		fmt.Printf("My nodeID : %s\n", nodeID)
 		if nodeID == "" {
 			startNodeCmd.Usage()
 			os.Exit(1)

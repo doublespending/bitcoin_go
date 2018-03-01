@@ -6,11 +6,11 @@ import (
 	"crypto/elliptic"
 	"crypto/rand"
 	"crypto/sha256"
+	"encoding/hex"
 	"math/big"
 	"strings"
 
 	"encoding/gob"
-	"encoding/hex"
 	"fmt"
 	"log"
 )
