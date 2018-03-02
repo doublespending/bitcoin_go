@@ -24,11 +24,12 @@ type Blockchain struct {
 
 func (bc *Blockchain) GetBlock(blockHash []byte) (Block, error) {
 	var block Block
+	var blockData []byte
 
 	err := bc.db.View(func(tx *bolt.Tx) error {
 		b := tx.Bucket([]byte(blocksBucket))
 
-		blockData := b.Get(blockHash)
+		blockData = b.Get(blockHash)
 
 		if blockData == nil {
 			return errors.New("Block is not found.")

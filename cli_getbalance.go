@@ -15,7 +15,7 @@ func (cli *CLI) getBalance(address, nodeID string) {
 
 	pubKeyHash := Base58Decode([]byte(address))
 	pubKeyHash = pubKeyHash[1 : len(pubKeyHash)-4]
-	_, balance := UTXOSet.FindUTXO(pubKeyHash)
+	balance, _ := UTXOSet.FindUTXO(pubKeyHash)
 
 	fmt.Printf("Balance of '%s': %d\n", address, balance)
 }

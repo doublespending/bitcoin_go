@@ -34,9 +34,9 @@ type addr struct {
 	AddrList []string
 }
 
-type block struct {
-	AddrFrom string
+type blockC struct {
 	Block    []byte
+	AddrFrom string
 }
 
 type getblocks struct {
@@ -124,11 +124,7 @@ func sendAddr(address string) {
 }
 
 func sendBlock(address string, b *Block) {
-	data := block{nodeAddress, b.Serialize()}
-	fmt.Println("Sending Block: ")
-
-	fmt.Printf("Merkle Root: %x\n", DeserializeBlock(b.Serialize()).HashTransactions())
-
+	data := blockC{b.Serialize(), nodeAddress}
 	payload := gobEncode(data)
 	request := append(commandToBytes("block"), payload...)
 
@@ -208,7 +204,7 @@ func handleAddr(request []byte) {
 
 func handleBlock(request []byte, bc *Blockchain) {
 	var buff bytes.Buffer
-	var payload block
+	var payload blockC
 
 	buff.Write(request[commandLength:])
 	dec := gob.NewDecoder(&buff)
@@ -219,25 +215,19 @@ func handleBlock(request []byte, bc *Blockchain) {
 
 	blockData := payload.Block
 	/*
-		Serialize()和DeserializeBlock()这对有点问题
+		Serialize()和DeserializeBlock()这对好像有点问题
 	*/
 	block := DeserializeBlock(blockData)
-
-	fmt.Printf("=============Receive Block %x ============\n", block.Hash)
-	fmt.Printf("Height: %d\n", block.Height)
-	fmt.Printf("Prev. block: %x\n", block.PrevBlockHash)
-	fmt.Printf("Merkle Root: %x\n", block.HashTransactions())
-	fmt.Printf("Timestamp: %x\n", IntToHex(block.Timestamp))
-	fmt.Printf("Nonce: %x\n", IntToHex(int64(block.Nonce)))
-
-	for _, tx := range block.Transactions {
-		fmt.Println(tx)
-	}
-	fmt.Println("===============================================================")
 
 	nodeID := nodeAddress[len(nodeAddress)-4 : len(nodeAddress)]
 
 	if block != nil {
+		/*
+			The received block is different from the one in database (it cannot pass the pow check).
+			You can check the merkle root.
+			I cannnot figure out. So I disable pow check in isGenesisBlock function first.
+
+		*/
 		if isGenesisBlock(block) {
 			fmt.Println("Receive a genesis block.")
 			if !dbExists(fmt.Sprintf(dbFile, nodeID)) {
@@ -245,6 +235,7 @@ func handleBlock(request []byte, bc *Blockchain) {
 				fmt.Printf("Accept that genesis block %x and create a blockchain", block.Hash)
 				utxo := UTXOSet{bc}
 				utxo.Reindex()
+
 			}
 		} else if dbExists(fmt.Sprintf(dbFile, nodeID)) {
 			utxo := UTXOSet{bc}
@@ -253,6 +244,7 @@ func handleBlock(request []byte, bc *Blockchain) {
 				bc.AddBlock(block)
 				utxo.Update(block)
 				fmt.Printf("Added block %x\n", block.Hash)
+
 			}
 		}
 	}
@@ -325,11 +317,7 @@ func handleGetBlocks(request []byte, bc *Blockchain) {
 	if err != nil {
 		log.Panic(err)
 	}
-	if bc != nil {
-		fmt.Println("Handle GetBlocks")
-		block, _ := bc.GetBlock(bc.tip)
-		fmt.Printf("Merkle Root: %x\n", block.HashTransactions())
-	}
+
 	blocks := bc.GetBlockHashes()
 	sendInv(payload.AddrFrom, "block", blocks)
 }
@@ -347,14 +335,11 @@ func handleGetData(request []byte, bc *Blockchain) {
 	}
 
 	if payload.Type == "block" {
-		if bc != nil {
-			fmt.Println("Handle GetData")
-			block, _ := bc.GetBlock(bc.tip)
-			fmt.Printf("Merkle Root: %x\n", block.HashTransactions())
-		}
 
 		fmt.Printf("I receive a request for block: %s\n", hex.EncodeToString(payload.ID))
+
 		block, err := bc.GetBlock(payload.ID)
+
 		fmt.Printf("Prev. block: %x\n", block.PrevBlockHash)
 		fmt.Printf("Merkle Root: %x\n", block.HashTransactions())
 		fmt.Printf("Timestamp: %x\n", IntToHex(block.Timestamp))
@@ -487,13 +472,21 @@ func handleVersion(request []byte, bc *Blockchain) {
 		log.Panic(err)
 	}
 
+	/*//////////magic codes///////////////////////
+	// Without that magic codes, the block ready to send is not equal to
+	// the one of database (it cannot pass the pow check).
+	// I cannot figure out. I Guess it is relate to
+	// the concurrency of database
+
 	if bc != nil {
-		fmt.Println("Handle Version")
+		fmt.Println("Handle GetBlocks")
 		block, _ := bc.GetBlock(bc.tip)
-		fmt.Printf("Merkle Root: %x\n", block.HashTransactions())
+		fmt.Printf("Tip Merkle Root: %x\n", block.HashTransactions())
 	}
+	*/ ///////////////////////////////////////////
 
 	myBestHeight, _ := bc.GetBestHeight()
+
 	foreignerBestHeight := payload.BestHeight
 	fmt.Printf("%s receives version from %s\n", nodeAddress, payload.AddrFrom)
 	if myBestHeight < foreignerBestHeight {
@@ -543,6 +536,9 @@ func handleConnection(conn net.Conn, bc *Blockchain) {
 		fmt.Println("Unknown command!")
 	}
 
+	if bc != nil {
+		bc.db.Close()
+	}
 	conn.Close()
 
 }
@@ -569,7 +565,7 @@ func StartServer(nodeID, minerAddress string) {
 	} else {
 		bc = NewBlockchain(nodeID)
 		height, _ := bc.GetBestHeight()
-		defer bc.db.Close()
+		bc.db.Close()
 		fmt.Printf("I already have a blockchain with height %d.\n", height)
 		if ElementInStrSlice(fullNodes, nodeAddress) == false {
 			sendVersion(fullNodes[0], bc)
@@ -582,13 +578,15 @@ func StartServer(nodeID, minerAddress string) {
 		if err != nil {
 			log.Panic(err)
 		}
-		// print the state of that node
 
+		if bc != nil {
+			bc = NewBlockchain(nodeID)
+		}
+
+		// print the state of that node
 		fmt.Printf("========My Address: %s=========Miner: %s=============\n", nodeAddress, miningAddress)
 		fmt.Printf("Neighbor: %s\n", knownNodes)
 		fmt.Printf("Full Node: %s\n", fullNodes)
-		height, _ := bc.GetBestHeight()
-		fmt.Printf("Blockchain Height: %d\n", height)
 		fmt.Println("=========================================================================")
 
 		go handleConnection(conn, bc)

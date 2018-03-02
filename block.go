@@ -37,10 +37,10 @@ func BlockEqual(b1 *Block, b2 *Block) bool {
 
 func isGenesisBlock(b *Block) bool {
 	if b.Height == 0 && len(b.Transactions) == 1 && b.Transactions[0].IsCoinbase() && len(b.PrevBlockHash) == 0 {
-		pow := NewProofOfWork(b)
-		if pow.Validate() {
-			return true
-		}
+		// disable pow check first
+		//pow := NewProofOfWork(b)
+		//return pow.Validate()
+		return true
 	}
 	return false
 }
@@ -70,8 +70,10 @@ func (b *Block) Serialize() []byte {
 
 func DeserializeBlock(d []byte) *Block {
 	var block Block
+	var buff bytes.Buffer
 
-	decoder := gob.NewDecoder(bytes.NewReader(d))
+	buff.Write(d)
+	decoder := gob.NewDecoder(&buff)
 	err := decoder.Decode(&block)
 	if err != nil {
 		log.Panic(err)

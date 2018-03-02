@@ -38,10 +38,4 @@ func (cli *CLI) printChain(nodeID string) {
 
 	}
 
-	bb, _ := bc.GetBlock(bc.tip)
-	test1 := bb.HashTransactions()
-	test2 := DeserializeBlock(bb.Serialize()).HashTransactions()
-	fmt.Printf("test1: %x\n", test1)
-	fmt.Printf("test2: %x\n", test2)
-
 }
