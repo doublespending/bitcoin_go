@@ -7,7 +7,7 @@ It's a simple implementation of Bitcoin in Golang.
 1. UTXO Set
 2. Block Mining
 3. Merkle Root
-4. Coin Transfer // TO DO: Use script instead of simple coin transafer so that it can support multiSign, reward for answer and so so.
+4. Coin Transfer // TO DO: Use script so that it can support multiSign, question reward and so on.
 5. Simple Wallet
 
 ### Bitcoin P2P Network
