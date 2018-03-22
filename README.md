@@ -1,4 +1,5 @@
-
+// Now the implementation is mainly from https://github.com/Jeiwan/blockchain_go/tree/master
+// It's just a beginning and I will redesign the bitcoin_go completely.
 # Blockchain 001
 It's a simple implementation of Bitcoin in Golang.
 
